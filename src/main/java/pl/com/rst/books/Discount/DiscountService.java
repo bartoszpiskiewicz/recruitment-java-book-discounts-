@@ -4,6 +4,8 @@ import pl.com.rst.books.Book.Book;
 import pl.com.rst.books.Book.BookNotFoundException;
 import pl.com.rst.books.Book.BookRepository;
 
+import java.util.Arrays;
+
 public class DiscountService {
 
     private static final DiscountResult ZERO_DISCOUNT = new DiscountResult(0);
@@ -19,35 +21,44 @@ public class DiscountService {
             return ZERO_DISCOUNT;
         }
 
-        boolean discountAlreadyCalculated = false;
-        float totalDiscount = 0;
         Book book = bookRepository.getBook(bookId).orElseThrow(BookNotFoundException::new);
 
-        for (String discount : availableDiscounts) {
-            switch (discount) {
-                case "large-order":
-                    if (!discountAlreadyCalculated && orderPrice > 300) {
-                        Discount largeOrderDiscount = book.getLargeOrderDiscount();
-                        totalDiscount += book.getPrice() * Utils.percentToFloat(largeOrderDiscount.getDiscount());
-                    }
+        /**
+         * As I read the code in loop I wonder if this part of business logic has sense.
+         * discountAlreadyCalculated is set even if code is used
+         * order of the codes changes discount
+         *
+         * I'll change the logic, but I without speaking to business I'm unable to understand it.
+        */
 
-                    break;
-                case "code":
+        double totalDiscount = Arrays.stream(availableDiscounts)
+                .filter("code"::equals)
+                .mapToDouble(code -> toDiscount(book, discountCode))
+                .sum();
 
-                    if (book.isCodeNotUsed(discountCode)) {
-                        Discount codeDiscount = book.useDiscountCode(discountCode);
-
-                        totalDiscount += codeDiscount.getType() == DiscountType.PERCENT ?
-                                book.getPrice() * Utils.percentToFloat(codeDiscount.getDiscount())
-                                : codeDiscount.getDiscount();
-                    }
-
-                    discountAlreadyCalculated = true;
-                    break;
-            }
+        if (totalDiscount == 0 && orderPrice > 300) {
+            totalDiscount += Arrays.stream(availableDiscounts)
+                    .filter("large-order"::equals)
+                    .mapToDouble(code -> computeLargeOrderDiscount(book))
+                    .sum();
         }
 
         return new DiscountResult((long)totalDiscount);
+    }
+
+    private double computeLargeOrderDiscount(Book book) {
+        Discount largeOrderDiscount = book.getLargeOrderDiscount();
+        return book.getPrice() * Utils.percentToFloat(largeOrderDiscount.getDiscount());
+    }
+
+    private float toDiscount(Book book, String discountCode) {
+        if (book.isCodeNotUsed(discountCode)) {
+            Discount codeDiscount = book.useDiscountCode(discountCode);
+            return codeDiscount.getType() == DiscountType.PERCENT ?
+                    book.getPrice() * Utils.percentToFloat(codeDiscount.getDiscount())
+                    : codeDiscount.getDiscount();
+        }
+        return 0;
     }
 
     public static class DiscountResult {
