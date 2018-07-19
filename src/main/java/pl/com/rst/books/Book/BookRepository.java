@@ -1,7 +1,10 @@
 package pl.com.rst.books.Book;
 
+
+import java.util.Optional;
+
 public class BookRepository {
-    public Book getBook(long id) {
-        return new Book();
+    public Optional<Book> getBook(long id) {
+        return Optional.of(new Book());
     }
 }
